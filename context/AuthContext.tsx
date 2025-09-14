@@ -8,12 +8,16 @@ import React, {
 } from "react";
 import { User, UserRole } from "../types";
 
-// ===== Cognito Hosted UI config (replace with your real values) =====
+// ===== Cognito Hosted UI config =====
 const COGNITO_DOMAIN =
-  "us-east-1yui7wwdxt.auth.us-east-1.amazoncognito.com"; // <-- confirm
-const COGNITO_CLIENT_ID = "3811roiq7vloo7q2si1nrpgs0d"; // <-- confirm
-const COGNITO_REDIRECT_URI = "http://localhost:5173"; // must match app client
-const COGNITO_LOGOUT_URI = "http://localhost:5173"; // must match app client
+  "us-east-1yui7wwdxt.auth.us-east-1.amazoncognito.com"; // Confirm your domain
+const COGNITO_CLIENT_ID = "3811roiq7vloo7q2si1nrpgs0d"; // Confirm client ID
+
+// Dynamically pick redirect based on environment
+const ORIGIN_WITH_SLASH = `${window.location.origin.replace(/\/+$/, "")}/`;
+
+const COGNITO_REDIRECT_URI = ORIGIN_WITH_SLASH;
+const COGNITO_LOGOUT_URI = ORIGIN_WITH_SLASH;
 
 const TOKEN_STORAGE_KEY = "cognito_id_token";
 
@@ -31,9 +35,7 @@ function decodeJwtPayload<T = any>(jwt: string): T {
   const base64Url = jwt.split(".")[1];
   if (!base64Url) throw new Error("Invalid JWT");
 
-  // base64url -> base64
   const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
-  // pad if needed
   const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4);
 
   const json = atob(padded);
@@ -44,18 +46,16 @@ const parseToken = (idToken: string): User | null => {
   try {
     const decodedPayload: any = decodeJwtPayload(idToken);
 
-    // Expiry check
     if (decodedPayload.exp * 1000 < Date.now()) {
       console.warn("Cognito token is expired.");
       localStorage.removeItem(TOKEN_STORAGE_KEY);
       return null;
     }
 
-    // Accept several possible group labels you’ve used earlier
     const groups: string[] = decodedPayload["cognito:groups"] || [];
     const has = (g: string) => groups.includes(g);
 
-    let role = UserRole.CLINIC; // default
+    let role = UserRole.CLINIC;
     if (has("MedisysAdmin") || has("MedSysAdmin") || has("Admin")) {
       role = UserRole.ADMIN;
     } else if (has("MedisysStaff") || has("MedSysStaff") || has("Staff")) {
@@ -91,7 +91,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // 1) Try stored token
     const storedToken = localStorage.getItem(TOKEN_STORAGE_KEY);
     if (storedToken) {
       const sessionUser = parseToken(storedToken);
@@ -102,14 +101,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
       }
     }
 
-    // 2) Try URL fragment from Hosted UI redirect (Implicit flow)
     const hash = window.location.hash.startsWith("#")
       ? window.location.hash.slice(1)
       : window.location.hash;
 
     if (hash) {
       const params = new URLSearchParams(hash);
-      // Cognito often returns id_token when scope includes "openid"
       const idToken = params.get("id_token");
 
       if (idToken) {
@@ -118,7 +115,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
           localStorage.setItem(TOKEN_STORAGE_KEY, idToken);
           setUser(cognitoUser);
         }
-        // Clean the fragment after consuming it
         window.history.replaceState(
           null,
           "",
@@ -132,9 +128,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
 
   const login = () => {
     setLoading(true);
-    // Use properly encoded space-delimited scopes
     const scopes = encodeURIComponent("openid profile email");
-    // Implicit grant: response_type=token (Cognito will include id_token with openid scope)
     const authUrl = `https://${COGNITO_DOMAIN}/login?client_id=${encodeURIComponent(
       COGNITO_CLIENT_ID
     )}&response_type=token&scope=${scopes}&redirect_uri=${encodeURIComponent(
