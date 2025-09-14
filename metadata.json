@@ -1,0 +1,5 @@
+{
+  "name": "MediSys Diagnostic Portal Application",
+  "description": "A secure portal for MediSys Diagnostics Ltd. and its partner clinics to manage, upload, and review diagnostic test reports. The system features role-based access for clinic staff, MediSys staff, and administrators, along with a dashboard for report analytics.",
+  "requestFramePermissions": []
+}
