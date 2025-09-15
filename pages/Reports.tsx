@@ -18,7 +18,7 @@ import {
   ClockIcon,
 } from "@heroicons/react/24/solid";
 
-/* --------- helpers: decode JWT to read groups as fallback --------- */
+/* SECTION: Role helpers — safe fallback if AuthContext isn't populated yet */
 function getJwtGroups(): string[] {
   try {
     const token = localStorage.getItem("cognito_id_token");
@@ -33,7 +33,6 @@ function getJwtGroups(): string[] {
     return [];
   }
 }
-
 function roleFromGroups(groups: string[]): UserRole {
   if (!groups || !groups.length) return UserRole.CLINIC;
   if (groups.includes("MedisysAdmin") || groups.includes("MedSysAdmin"))
@@ -43,41 +42,7 @@ function roleFromGroups(groups: string[]): UserRole {
   return UserRole.CLINIC;
 }
 
-/** Normalize any backend item (Admin path) into the UI's Report shape. */
-function normalizeReport(x: any): Report {
-  const id = x?.id ?? x?.ReportId ?? x?.reportId ?? "";
-
-  const patientName =
-    x?.patientName ??
-    (([x?.PATIENTFIRSTNAME, x?.PATIENTLASTNAME].filter(Boolean).join(" ")) ||
-      x?.PATIENT_ID ||
-      "—");
-
-  const diagnosticType = x?.diagnosticType ?? x?.DIAGNOSTICTYPE ?? "Unknown";
-
-  const submissionDate =
-    x?.submissionDate ?? String(x?.UploadTime ?? x?.LASTCHECKED ?? "");
-
-  const clinicName = x?.clinicName ?? (x?.CLINIC_ID ?? "");
-
-  const statusStr = String(x?.status ?? x?.Status ?? "PENDING").toUpperCase();
-  const status =
-    statusStr === "APPROVED"
-      ? ReportStatus.APPROVED
-      : statusStr === "REJECTED"
-      ? ReportStatus.REJECTED
-      : ReportStatus.PENDING;
-
-  return {
-    id,
-    patientName,
-    diagnosticType,
-    submissionDate,
-    clinicName,
-    status,
-  } as unknown as Report;
-}
-
+/* SECTION: UI helper — consistent status badge */
 const getStatusBadge = (status: ReportStatus) => {
   switch (status) {
     case ReportStatus.APPROVED:
@@ -110,19 +75,20 @@ const getStatusBadge = (status: ReportStatus) => {
 const Reports: React.FC = () => {
   const { user } = useAuth();
 
+  /* SECTION: Role detection — prefer context, fall back to JWT groups */
   const safeRole: UserRole = useMemo(() => {
     if (user?.role) return user.role;
     return roleFromGroups(getJwtGroups());
   }, [user?.role]);
 
-  // state (raw for staff; tolerant for others)
+  /* SECTION: State — reports list, UX state, and toasts */
   const [reports, setReports] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
   const [notice, setNotice] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
   const flash = (type: "success" | "error", text: string) => {
     setNotice({ type, text });
     setTimeout(() => setNotice(null), 5000);
@@ -132,6 +98,7 @@ const Reports: React.FC = () => {
   const isAdmin = safeRole === UserRole.ADMIN;
   const isStaff = safeRole === UserRole.STAFF;
 
+  /* SECTION: Data fetch — role-aware sources; tolerant to shapes */
   const fetchReports = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -144,7 +111,8 @@ const Reports: React.FC = () => {
         const arr = Array.isArray(data) ? data : [];
         arr
           .sort((a: any, b: any) =>
-            String(a.UploadTime ?? "").localeCompare(String(b.UploadTime ?? ""))
+            String(a.UploadTime ?? "").localeCompare(String(b.UploadTime ?? "")
+            )
           )
           .reverse();
         setReports(arr);
@@ -166,7 +134,7 @@ const Reports: React.FC = () => {
     fetchReports();
   }, [fetchReports]);
 
-  // === updated: add success/error flashes on approve/reject ===
+  /* SECTION: Actions — Admin approve/reject/delete with success/error flashes */
   const handleStatusChange = async (reportId: string, status: ReportStatus) => {
     try {
       await reviewReport(reportId, {
@@ -178,7 +146,6 @@ const Reports: React.FC = () => {
             : "Pending",
       });
       await fetchReports();
-
       if (status === ReportStatus.APPROVED) {
         flash("success", `Report ${reportId} approved successfully.`);
       } else if (status === ReportStatus.REJECTED) {
@@ -192,7 +159,6 @@ const Reports: React.FC = () => {
     }
   };
 
-  // === updated: add success/error flashes on delete ===
   const handleDelete = async (reportId: string) => {
     if (window.confirm("Are you sure you want to delete this report?")) {
       try {
@@ -206,7 +172,7 @@ const Reports: React.FC = () => {
     }
   };
 
-  // Upload (clinic only)
+  /* SECTION: Upload (Clinic) — presigned URL flow; no base64 anywhere */
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const inputEl = e.target as HTMLInputElement;
     if (!(inputEl.files && inputEl.files[0])) return;
@@ -237,7 +203,10 @@ const Reports: React.FC = () => {
         throw new Error(`S3 upload failed: ${put.status} ${t || put.statusText}`);
       }
 
-      flash("success", `Report file "${file.name}" uploaded successfully. Processing has started.`);
+      flash(
+        "success",
+        `Report file "${file.name}" uploaded successfully. Processing has started.`
+      );
       await fetchReports();
     } catch (err: any) {
       console.error("Upload failed", err);
@@ -253,7 +222,7 @@ const Reports: React.FC = () => {
     return <div className="text-center p-10">Loading reports...</div>;
   }
 
-  // helpers to read values flexibly across raw + normalized shapes
+  /* SECTION: Rendering helpers — normalize status across shapes */
   const asStatusEnum = (r: any): ReportStatus => {
     const s = String(r?.status ?? r?.Status ?? "PENDING").toUpperCase();
     return s === "APPROVED"
@@ -267,6 +236,7 @@ const Reports: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {/* SECTION: Header & upload CTA (Clinic only) */}
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold text-gray-800">{headerTitle}</h1>
         {isClinic && (
@@ -284,6 +254,7 @@ const Reports: React.FC = () => {
         )}
       </div>
 
+      {/* SECTION: Toasts & errors */}
       {notice && (
         <div
           className={`rounded-md px-4 py-3 ${
@@ -295,13 +266,13 @@ const Reports: React.FC = () => {
           {notice.text}
         </div>
       )}
-
       {error && <div className="text-center p-4 text-red-500">{error}</div>}
 
+      {/* SECTION: Tables — admin/clinic detailed; staff read-only */}
       <div className="bg-white rounded-xl shadow-md overflow-hidden">
         <div className="overflow-x-auto">
-          {/* ---------- Admin & Clinic detailed table ---------- */}
           {!isStaff ? (
+            /* ---------- Admin & Clinic detailed table ---------- */
             <table className="min-w-full text-sm divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
@@ -501,6 +472,7 @@ const Reports: React.FC = () => {
         </div>
       </div>
 
+      {/* SECTION: Upload modal (Clinic) */}
       {showUploadModal && isClinic && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-8 max-w-md w-full">
