@@ -64,18 +64,17 @@ const parseToken = (idToken: string): User | null => {
       role = UserRole.CLINIC;
     }
 
-    // Ensure user.name is never a UUID — fallback to email prefix
-    const email: string = decodedPayload.email || "";
-    const emailPrefix = email.includes("@") ? email.split("@")[0] : email;
+    // ✅ Always prefer readable identifiers instead of UUID
+    const displayName =
+      decodedPayload.name || // first priority
+      decodedPayload["cognito:username"] || // fallback
+      decodedPayload.email || // fallback
+      "User"; // last fallback
 
     const cognitoUser: User = {
       id: decodedPayload.sub,
-      name:
-        decodedPayload.name ||
-        decodedPayload["cognito:username"] ||
-        emailPrefix ||
-        "User",
-      email,
+      name: displayName, // ✅ prevents UUID showing
+      email: decodedPayload.email,
       role,
       clinicId: decodedPayload["custom:clinicId"],
       clinicName: decodedPayload["custom:clinicName"],
