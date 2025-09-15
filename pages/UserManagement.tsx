@@ -34,7 +34,6 @@ function roleFromGroups(groups: string[] | undefined): "ADMIN" | "STAFF" | "CLIN
 }
 
 const roleBadge = (roleLike: ApiRole | "ADMIN" | "STAFF" | "CLINIC" | string) => {
-  // Accept either API group names or normalized UI roles
   const norm =
     roleLike === "MedisysAdmin" || roleLike === "ADMIN"
       ? "ADMIN"
@@ -110,7 +109,7 @@ const UserManagement: React.FC = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<UserRole>(UserRole.CLINIC);
-  const [clinicId, setClinicId] = useState(""); // <-- Clinic ID instead of Clinic Name
+  const [clinicId, setClinicId] = useState("");
   const [creating, setCreating] = useState(false);
 
   const [flash, setFlash] = useState<Flash>(null);
@@ -122,7 +121,6 @@ const UserManagement: React.FC = () => {
     setFlash({ type: "error", text: msg });
   }
 
-  // auto-dismiss flash after 4s
   useEffect(() => {
     if (!flash) return;
     const t = setTimeout(() => setFlash(null), 4000);
@@ -153,11 +151,13 @@ const UserManagement: React.FC = () => {
       const apiRole = toApiRole(role);
       const derivedName = email.includes("@") ? email.split("@")[0] : email;
 
-      // Send clinicId for ClinicStaff users
+      // Sanitize clinicId
+      const finalClinicId = clinicId ? clinicId.trim().toUpperCase() : undefined;
+
       await apiCreateUser({
         email,
         role: apiRole,
-        clinicId: role === UserRole.CLINIC ? clinicId : undefined,
+        clinicId: role === UserRole.CLINIC ? finalClinicId : undefined,
         name: derivedName,
       });
 
@@ -209,7 +209,6 @@ const UserManagement: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Toast */}
       <FlashToast flash={flash} onClose={() => setFlash(null)} />
 
       <div className="flex justify-between items-center">
@@ -227,17 +226,10 @@ const UserManagement: React.FC = () => {
         {users.map((u, i) => {
           const emailVal = u.Email ?? u.email ?? "";
           const localPart = emailVal ? String(emailVal).split("@")[0] : "";
-          // Prefer friendly name, then email local-part, then email; avoid UUID-like Username
           const displayName =
-            u.name ??
-            u.Name ??
-            (localPart || emailVal) ??
-            u.username ??
-            u.Username ??
-            "Unknown";
+            u.name ?? u.Name ?? (localPart || emailVal) ?? u.username ?? u.Username ?? "Unknown";
 
           const groups = (u.groups ?? u.Groups) as string[] | undefined;
-          // prefer explicit role from API; otherwise derive from groups
           const uiRole = (u.role as string | undefined)?.toUpperCase?.() as
             | "ADMIN"
             | "STAFF"
@@ -292,9 +284,7 @@ const UserManagement: React.FC = () => {
             <h2 className="text-2xl font-bold mb-6">Create New User</h2>
             <form onSubmit={onCreate} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Email
-                </label>
+                <label className="block text-sm font-medium text-gray-700">Email</label>
                 <input
                   type="email"
                   value={email}
@@ -305,9 +295,7 @@ const UserManagement: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Role
-                </label>
+                <label className="block text-sm font-medium text-gray-700">Role</label>
                 <select
                   value={role}
                   onChange={(e) => setRole(e.target.value as unknown as UserRole)}
@@ -329,8 +317,8 @@ const UserManagement: React.FC = () => {
                     value={clinicId}
                     onChange={(e) => setClinicId(e.target.value.toUpperCase())}
                     required
-                    pattern="^CLINIC_\\d{3}$"
-                    title="Clinic ID must match CLINIC_### (e.g., CLINIC_001)"
+                    pattern="^CLINIC_\\d+$"
+                    title="Clinic ID must match CLINIC_number (e.g., CLINIC_001)"
                     className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary focus:border-primary"
                   />
                 </div>
