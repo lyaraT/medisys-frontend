@@ -1,6 +1,6 @@
 import React from "react";
 import { useAuth } from "../context/AuthContext";
-import { UserRole } from "../types"; // <-- import the enum
+import { UserRole } from "../types"; 
 import { UserIcon, ArrowRightOnRectangleIcon } from "@heroicons/react/24/solid";
 
 const Header: React.FC = () => {
@@ -8,7 +8,6 @@ const Header: React.FC = () => {
 
   if (!user) return null;
 
-  // Use enum instead of string
   const isClinic = user.role === UserRole.CLINIC;
 
   return (
@@ -28,7 +27,8 @@ const Header: React.FC = () => {
           ) : (
             <>
               <p className="font-semibold text-gray-800">{user.name}</p>
-              <p className="text-sm text-gray-500">{user.role}</p>
+              <p className="text-sm text-gray-600">{user.role}</p>
+              <p className="text-sm text-gray-500">{user.email}</p>
             </>
           )}
         </div>
