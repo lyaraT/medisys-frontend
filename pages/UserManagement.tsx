@@ -315,10 +315,23 @@ const UserManagement: React.FC = () => {
                   <input
                     type="text"
                     value={clinicId}
-                    onChange={(e) => setClinicId(e.target.value.toUpperCase())}
+                    onChange={(e) =>
+                      setClinicId(e.target.value.toUpperCase().replace(/\s+/g, ""))
+                    }
                     required
-                    pattern="^CLINIC_\\d+$"
+                    /* HTML pattern engine: use [0-9]+ (no ^$ anchors) */
+                    pattern="CLINIC_[0-9]+"
                     title="Clinic ID must match CLINIC_number (e.g., CLINIC_001)"
+                    onInvalid={(e) =>
+                      (e.currentTarget as HTMLInputElement).setCustomValidity(
+                        "Clinic ID must match CLINIC_number (e.g., CLINIC_001)"
+                      )
+                    }
+                    onInput={(e) =>
+                      (e.currentTarget as HTMLInputElement).setCustomValidity("")
+                    }
+                    autoComplete="off"
+                    spellCheck={false}
                     className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary focus:border-primary"
                   />
                 </div>
